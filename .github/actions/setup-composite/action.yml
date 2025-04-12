@@ -1,0 +1,72 @@
+name: 'PC-lint Plus Action'
+description: |
+  'Like a compiler, PC-lint Plus parses your source code files, performs
+  semantic analysis, and builds an abstract syntax tree to represent your program.'
+inputs:
+  install-dir:
+    description: 'PC-lint Plus install directory'
+    required: true
+    type: string
+  license:
+    description: "PC-lint Plus SE license"
+    required: true
+    type: string
+  compiler:
+    description: "Compiler type"
+    required: true
+    type: string
+  compiler-bin:
+    description: "Compiler binary"
+    required: true
+    type: string
+  args:
+    description: "Command-line arguments"
+    required: false
+    type: string
+  log:
+    description: "File name where lint results are logged"
+    required: true
+    type: string
+  uniqueId:
+    description: "upload-artifact@v4 requires unique ID for each iteration."
+    required: true
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get license
+      run: |
+        mkdir -p ${{ inputs.install-dir }}/pclp &&
+        echo '${{ inputs.license }}' > ${{ inputs.install-dir }}/pclp/license.lic
+      shell: bash
+
+    - name: Install PC-lint Plus
+      run: |
+        curl -O https://pclintplus.com/storage/2024/03/pclp.linux.2.1.tar.gz &&
+        tar xf pclp.linux.2.1.tar.gz -C ${{ inputs.install-dir }} &&
+        ${{ inputs.install-dir }}/pclp/pclp64_linux -v
+      shell: bash
+
+    - name: Configure PC-lint Plus
+      run: |
+        python ${{ inputs.install-dir }}/pclp/config/pclp_config.py \
+          --compiler=${{ inputs.compiler }}                         \
+          --compiler-bin=${{ inputs.compiler-bin }}                 \
+          --config-output-lnt-file=compiler.lnt                     \
+          --config-output-header-file=compiler.h                    \
+          --generate-compiler-config
+      shell: bash
+
+    - name: Analyze
+      run: |
+        ${{ inputs.install-dir }}/pclp/pclp64_linux -i${{ inputs.install-dir }}/pclp/config compiler.lnt ${{ inputs.args }} | tee ${{ inputs.log }}
+      shell: bash
+
+    - name: Publish results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: Analyzer results (${{ inputs.uniqueId }})
+        path: ${{ inputs.log }}
+  
